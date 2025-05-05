@@ -1,0 +1,22 @@
+{
+    "type": "text",
+    "content": "Hi there! We noticed that you're using a custom theme. We'd be happy to do a quick check to make sure the label/badge displays properly. Would you like us to take a look? 😉",
+    "actions": [
+        {
+            "type": "button",
+            "text": "Check My Theme",
+            "action": {
+                "type": "postback",
+                "payload": "CHECK_THEME"
+            }
+        },
+        {
+            "type": "button",
+            "text": "Not Now",
+            "action": {
+                "type": "postback",
+                "payload": "NOT_NOW"
+            }
+        }
+    ]
+}
