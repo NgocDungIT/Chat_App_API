@@ -1,6 +1,10 @@
 const { Router } = require('express');
 const { verifyToken } = require('../middlewares/AuthMiddleware');
-const { searchContacts, getContactsForDMList, getAllContacts } = require('../controllers/ContactsController');
+const {
+    searchContacts,
+    getContactsForDMList,
+    getAllContacts,
+} = require('../controllers/ContactsController');
 
 const contactsRoutes = Router();
 

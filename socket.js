@@ -13,7 +13,7 @@ const setupSocket = (server) => {
 
     const userSocketMap = new Map();
 
-    const sendMessage = async (message) => {
+    const sendMessage = async ({ message, contact }) => {
         const senderSocketId = userSocketMap.get(message.sender);
         const recipientSocketId = userSocketMap.get(message.recipient);
 
@@ -24,6 +24,7 @@ const setupSocket = (server) => {
 
         if (recipientSocketId) {
             io.to(recipientSocketId).emit('recieveMessage', messageData);
+            io.to(recipientSocketId).emit('addDirectContact', contact);
         }
 
         if (senderSocketId) {
@@ -46,6 +47,12 @@ const setupSocket = (server) => {
             .populate('sender', 'id email color firstName lastName image')
             .exec();
 
+        await Channel.findByIdAndUpdate(channelId, {
+            $push: {
+                messages: createdMessage._id,
+            },
+        });
+
         const channel = await Channel.findById(channelId).populate('members');
 
         const finalData = { ...messageData._doc, channelId: channel._id };
@@ -59,17 +66,102 @@ const setupSocket = (server) => {
                         finalData
                     );
                 }
+            });
+            const adminSocketId = userSocketMap.get(
+                channel.admin._id.toString()
+            );
+            if (adminSocketId) {
+                io.to(adminSocketId).emit('recieveChannelMessage', finalData);
+            }
+        }
+    };
 
+    const sendChannelRename = async ({ channelId, newTitle }) => {
+        try {
+            // Update channel in database
+            const updatedChannel = await Channel.findByIdAndUpdate(
+                channelId,
+                { name: newTitle },
+                { new: true }
+            ).populate('members');
+
+            if (!updatedChannel) {
+                throw new Error('Channel not found');
+            }
+
+            // Notify all members
+            const finalData = {
+                channelId: updatedChannel._id,
+                title: newTitle,
+            };
+
+            if (updatedChannel?.members) {
+                updatedChannel.members.forEach((member) => {
+                    const memberSocketId = userSocketMap.get(
+                        member._id.toString()
+                    );
+                    if (memberSocketId) {
+                        io.to(memberSocketId).emit('channelRenamed', finalData);
+                    }
+                });
                 const adminSocketId = userSocketMap.get(
-                    channel.admin._id.toString()
+                    updatedChannel.admin._id.toString()
                 );
                 if (adminSocketId) {
-                    io.to(adminSocketId).emit(
-                        'recieveChannelMessage',
-                        finalData
-                    );
+                    io.to(adminSocketId).emit('channelRenamed', finalData);
+                }
+            }
+
+            return finalData;
+        } catch (error) {
+            console.error('Error renaming channel:', error);
+            throw error;
+        }
+    };
+
+    const sendChannelCreate = async ({ channel }) => {
+        if (channel?.members) {
+            channel.members.forEach((member) => {
+                const memberSocketId = userSocketMap.get(member._id.toString());
+                if (memberSocketId) {
+                    io.to(memberSocketId).emit('channelCreated', channel);
                 }
             });
+
+            const adminSocketId = userSocketMap.get(
+                channel.admin._id.toString()
+            );
+            if (adminSocketId) {
+                io.to(adminSocketId).emit('channelCreated', channel);
+            }
+        }
+    };
+
+    const sendChannelDelete = async ({ channelId }) => {
+        try {
+            const channel = await Channel.findById(channelId).populate({
+                path: 'messages',
+                populate: {
+                    path: 'sender',
+                    select: 'firstName lastName email _id image color',
+                },
+            });
+
+            if (channel?.members) {
+                channel.members.forEach((member) => {
+                    const memberSocketId = userSocketMap.get(
+                        member._id.toString()
+                    );
+                    if (memberSocketId) {
+                        io.to(memberSocketId).emit('channelDeleted', channelId);
+                    }
+                });
+            }
+
+            await Channel.findByIdAndDelete(channelId);
+        } catch (error) {
+            console.error('Error renaming channel:', error);
+            throw error;
         }
     };
 
@@ -94,6 +186,9 @@ const setupSocket = (server) => {
 
         socket.on('sendMessage', sendMessage);
         socket.on('sendChannelMessage', sendChannelMessage);
+        socket.on('renameChannel', sendChannelRename);
+        socket.on('createChannel', sendChannelCreate);
+        socket.on('deleteChannel', sendChannelDelete);
 
         socket.on('disconnect', () => {
             console.log('❌ User disconnected:', userId);

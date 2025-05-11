@@ -12,6 +12,7 @@ const userRoutes = require('./routes/UserRoute');
 const contactsRoutes = require('./routes/ContactRoute');
 const messagesRoutes = require('./routes/MessagesRoute');
 const channelsRoutes = require('./routes/ChannelRoute');
+const chatBotRouter = require('./routes/ChatBotRoute');
 
 dotenv.config();
 
@@ -45,6 +46,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/contacts', contactsRoutes);
 app.use('/api/messages', messagesRoutes);
 app.use('/api/channel', channelsRoutes);
+app.use('/api/chat-bot', chatBotRouter);
 
 const server = app.listen(port, () => {
     console.log(`Example app listening on port ${port}`);
