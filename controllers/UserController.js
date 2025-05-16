@@ -93,15 +93,17 @@ async function deleteImage(req, res, next) {
 
     if (idImage) {
         try {
-            await cloudinary.uploader.destroy(`Avatar-Chat-App/${idImage}`, { resource_type: 'image' });
+            await cloudinary.uploader.destroy(`Avatar-Chat-App/${idImage}`, {
+                resource_type: 'image',
+            });
             await User.findByIdAndUpdate(
                 userId,
-                { image: "" },
+                { image: '' },
                 { new: true, runValidators: true }
             );
             res.status(200).send({
                 message: 'Delete image successfully',
-                url: "",
+                url: '',
             });
         } catch (error) {
             return res
@@ -109,9 +111,14 @@ async function deleteImage(req, res, next) {
                 .json({ message: 'Delete image failed', error });
         }
     } else {
+        console.log('Error: ', error.message);
         return res.status(500).json({ message: 'Delete image failed' });
     }
 }
 
-
-module.exports = { getUserById, updateUserById, uploadImage, deleteImage };
+module.exports = {
+    getUserById,
+    updateUserById,
+    uploadImage,
+    deleteImage,
+};

@@ -119,6 +119,35 @@ const setupSocket = (server) => {
         }
     };
 
+    const sendChannelChangeImage = async ({ channelId, url }) => {
+        try {
+            const channel = await Channel.findById(channelId).populate({
+                path: 'messages',
+                populate: {
+                    path: 'sender',
+                    select: 'firstName lastName email _id image color',
+                },
+            });
+
+            if (channel?.members) {
+                channel.members.forEach((member) => {
+                    const memberSocketId = userSocketMap.get(
+                        member._id.toString()
+                    );
+                    if (memberSocketId) {
+                        io.to(memberSocketId).emit('channelChangedImage', {
+                            channelId,
+                            url,
+                        });
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Error renaming channel:', error);
+            throw error;
+        }
+    };
+
     const sendChannelCreate = async ({ channel }) => {
         if (channel?.members) {
             channel.members.forEach((member) => {
@@ -189,6 +218,32 @@ const setupSocket = (server) => {
         socket.on('renameChannel', sendChannelRename);
         socket.on('createChannel', sendChannelCreate);
         socket.on('deleteChannel', sendChannelDelete);
+        socket.on('changeImageChannel', sendChannelChangeImage);
+
+        socket.on('callUser', (data) => {
+            const senderSocketId = userSocketMap.get(data.userToCall._id);
+
+            if (senderSocketId) {
+                io.to(senderSocketId).emit('callUser', {
+                    signal: data.signalData,
+                    from: data.from,
+                });
+            }
+        });
+
+        socket.on('answerCall', (data) => {
+            const senderSocketId = userSocketMap.get(data.to._id);
+            if (senderSocketId) {
+                io.to(senderSocketId).emit('callAccepted', data.signal);
+            }
+        });
+
+        socket.on('callEnded', (data) => {
+            const senderSocketId = userSocketMap.get(data.to._id);
+            if (senderSocketId) {
+                io.to(senderSocketId).emit('callEnded');
+            }
+        });
 
         socket.on('disconnect', () => {
             console.log('❌ User disconnected:', userId);

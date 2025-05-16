@@ -1,3 +1,5 @@
+const fs = require('fs');
+const cloudinary = require('cloudinary').v2;
 const { default: mongoose } = require('mongoose');
 const Channel = require('../models/Channel');
 const User = require('../models/User');
@@ -194,10 +196,105 @@ async function leaveChannel(req, res, next) {
     }
 }
 
+async function uploadImage(req, res, next) {
+    try {
+        const file = req.file;
+        const { channelId } = req.body;
+
+        // Kiểm tra channelId có hợp lệ không
+        if (!mongoose.Types.ObjectId.isValid(channelId)) {
+            if (file) fs.unlinkSync(file.path); // Xóa file tạm nếu có
+            return res.status(400).json({
+                message: 'Invalid channel ID',
+            });
+        }
+
+        // Kiểm tra có file được upload không
+        if (!file) {
+            return res.status(400).json({
+                message: 'No image file provided',
+            });
+        }
+
+        // Upload lên Cloudinary
+        const result = await cloudinary.uploader.upload(file.path, {
+            folder: 'Avatar-Chat-App',
+            resource_type: 'image',
+        });
+
+        // Xóa file tạm sau khi upload
+        fs.unlinkSync(file.path);
+
+        const channel = await Channel.findByIdAndUpdate(
+            channelId,
+            {
+                image: result.secure_url,
+            },
+            { new: true }
+        );
+
+        console.log("🚀 ~ uploadImage ~ channel:", channel)
+
+        return res.status(200).json({
+            message: 'Image uploaded successfully',
+            url: result.secure_url,
+        });
+    } catch (err) {
+        // Xóa file tạm nếu có lỗi
+        if (req.file) fs.unlinkSync(req.file.path);
+
+        return res.status(500).json({
+            message: 'Internal Server Error!',
+            error: err.message,
+        });
+    }
+}
+
+async function deleteImage(req, res, next) {
+    try {
+        const { idImage, channelId } = req.body;
+
+        // Kiểm tra channelId có hợp lệ không
+        if (!mongoose.Types.ObjectId.isValid(channelId)) {
+            return res.status(200).json({
+                message: 'Invalid channel ID',
+            });
+        }
+
+        if (!idImage) {
+            return res.status(200).json({
+                message: 'Invalid image id',
+            });
+        }
+
+        if (idImage) {
+            await cloudinary.uploader.destroy(`Avatar-Chat-App/${idImage}`, {
+                resource_type: 'image',
+            });
+            await Channel.findByIdAndUpdate(
+                channelId,
+                { image: null },
+                { new: true, runValidators: true }
+            );
+            res.status(200).send({
+                message: 'Delete image successfully',
+                url: null,
+            });
+        }
+    } catch (err) {
+        return res.status(500).json({
+            message: 'Internal Server Error!',
+            error: err.message,
+        });
+    }
+}
+
 module.exports = {
     createChannel,
     getUserChannels,
     getAllMessagesByChannel,
     addMembersChannel,
     leaveChannel,
+    uploadImage,
+    deleteImage,
 };
