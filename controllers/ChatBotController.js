@@ -62,9 +62,10 @@ async function addMessageSession(req, res, next) {
             {
                 $push: {
                     messages: {
-                        content: newMessage.content, // Sử dụng trường 'message' thay vì 'content'
+                        content: newMessage?.content || null, // Sử dụng trường 'message' thay vì 'content'
                         role: newMessage.role, // Sử dụng 'senderType' thay vì 'role'
-                        messageType: 'text',
+                        messageType: newMessage?.messageType || 'text',
+                        imageUrl: newMessage?.imageUrl || null,
                         createdAt: new Date(), // Thêm timestamp
                     },
                 },

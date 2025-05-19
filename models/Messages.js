@@ -13,7 +13,8 @@ const messageSchema = new mongoose.Schema({
     },
     messageType: {
         type: String,
-        enum: ['text', 'file'],
+        enum: ['text', 'file', 'call'],
+        default: 'text',
         required: false,
     },
     content: {
@@ -26,6 +27,12 @@ const messageSchema = new mongoose.Schema({
         type: String,
         required: function () {
             return this.messageType === 'file';
+        },
+    },
+    callTime: {
+        type: String,
+        required: function () {
+            return this.messageType === 'call';
         },
     },
     timestamp: {
