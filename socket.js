@@ -194,6 +194,33 @@ const setupSocket = (server) => {
         }
     };
 
+    const sendChannelKick = async ({ channel, userId }) => {
+        try {
+            const updatedChannel = await Channel.findByIdAndUpdate(
+                channel._id,
+                {
+                    $pull: { members: userId },
+                },
+                { new: true } // Trả về document sau khi update
+            );
+
+            if (!updatedChannel) {
+                throw new Error('Channel not found');
+            }
+            
+            const memberSocketId = userSocketMap.get(userId.toString());
+            
+            if (memberSocketId) {
+                io.to(memberSocketId).emit('userIsKickedOut', {
+                    channelId: channel._id
+                });
+            }
+        } catch (error) {
+            console.error('Error renaming channel:', error);
+            throw error;
+        }
+    };
+
     const disconnectSocket = (socket) => {
         for (const [userId, socketId] of userSocketMap.entries()) {
             if (socketId === socket.id) {
@@ -219,6 +246,7 @@ const setupSocket = (server) => {
         socket.on('createChannel', sendChannelCreate);
         socket.on('deleteChannel', sendChannelDelete);
         socket.on('changeImageChannel', sendChannelChangeImage);
+        socket.on('kickMemberChannel', sendChannelKick);
 
         socket.on('callUser', (data) => {
             const senderSocketId = userSocketMap.get(data.userToCall._id);
