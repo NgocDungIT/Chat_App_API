@@ -1,7 +1,11 @@
 const jwt = require('jsonwebtoken');
 const { compare } = require('bcrypt');
 const User = require('../models/User');
-const { getGoogleUserProfile } = require('../service/userService');
+const {
+    getGoogleUserProfile,
+    createOTPEmail,
+} = require('../service/userService');
+const OtpEmail = require('../models/OtpEmails');
 
 const maxAge = Math.floor(Date.now() / 1000) + 60 * 60 * 30;
 function createToken(email, userId) {
@@ -30,7 +34,47 @@ async function signup(req, res, next) {
             });
         }
 
+        await createOTPEmail(email);
+
+        return res.status(200).json({
+            message: 'Send email otp successfully!',
+            success: true,
+        });
+    } catch (err) {
+        return res.status(500).json({
+            message: 'Internal Server Error!',
+            error: err.message,
+        });
+    }
+}
+
+async function verifyOtp(req, res, next) {
+    try {
+        const { email, otp, password } = req.body;
+
+        if (!otp) {
+            return res.status(200).json({
+                message: 'Vui lòng điền otp.',
+            });
+        }
+
+        const otpRecord = await OtpEmail.findOne({ email, otp });
+        if (!otpRecord) {
+            return res.status(200).json({
+                message: 'OTP không hợp lệ.',
+            });
+        }
+
+        if (otpRecord.expiresAt < new Date()) {
+            await OtpEmail.deleteOne({ email, otp });
+            return res.status(200).json({
+                message: 'OTP đã hết hạn.',
+            });
+        }
+
         const user = await User.create({ email, password });
+        await OtpEmail.deleteOne({ email, otp });
+
         if (user) {
             const dataResponse = {
                 id: user.id,
@@ -172,4 +216,4 @@ async function logout(req, res, next) {
     }
 }
 
-module.exports = { signup, login, logout, loginWithGoogle };
+module.exports = { signup, login, logout, loginWithGoogle, verifyOtp };
