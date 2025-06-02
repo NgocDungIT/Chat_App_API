@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { compare } = require('bcrypt');
+const bcrypt = require('bcrypt');
 const User = require('../models/User');
 const {
     getGoogleUserProfile,
@@ -18,12 +18,44 @@ function createToken(email, userId) {
     );
 }
 
+async function sendOTP(req, res, next) {
+    try {
+        const { email } = req.body;
+        if (!email) {
+            return res.status(200).json({
+                message: 'Vui lòng điền email.',
+                success: false,
+            });
+        }
+
+        const checkUser = await User.findOne({ email });
+        if (!checkUser) {
+            return res.status(200).json({
+                message: 'Email chưa đăng kí tài khoản.',
+                success: false,
+            });
+        }
+
+        await createOTPEmail(email);
+
+        return res.status(200).json({
+            message: 'Send email otp successfully!',
+            success: true,
+        });
+    } catch (err) {
+        return res.status(500).json({
+            message: 'Internal Server Error!',
+            error: err.message,
+        });
+    }
+}
+
 async function signup(req, res, next) {
     try {
         const { email, password } = req.body;
         if (!email || !password) {
             return res.status(200).json({
-                message: 'Vui lòng điền tài khoản và mật khẩu.',
+                message: 'Vui lòng điền email và mật khẩu.',
             });
         }
 
@@ -44,6 +76,82 @@ async function signup(req, res, next) {
         return res.status(500).json({
             message: 'Internal Server Error!',
             error: err.message,
+        });
+    }
+}
+
+async function verifyEmail(req, res, next) {
+    const { email, otp } = req.body;
+    if (!otp) {
+        return res.status(200).json({
+            message: 'Vui lòng điền otp.',
+            status: false,
+        });
+    }
+
+    const otpRecord = await OtpEmail.findOne({ email, otp });
+    if (!otpRecord) {
+        return res.status(200).json({
+            message: 'OTP không hợp lệ.',
+            status: false,
+        });
+    }
+
+    if (otpRecord.expiresAt < new Date()) {
+        await OtpEmail.deleteOne({ email, otp });
+        return res.status(200).json({
+            message: 'OTP đã hết hạn.',
+            status: false,
+        });
+    }
+
+    return res.status(200).json({
+        message: 'Success verify OTP!',
+        status: true,
+    });
+}
+
+async function changePassword(req, res, next) {
+    const { email, otp, password } = req.body;
+
+    if (!otp) {
+        return res.status(200).json({
+            message: 'Vui lòng điền otp.',
+            success: false,
+        });
+    }
+
+    const otpRecord = await OtpEmail.findOne({ email, otp });
+    if (!otpRecord) {
+        return res.status(200).json({
+            message: 'OTP không hợp lệ.',
+            success: false,
+        });
+    }
+
+    if (otpRecord.expiresAt < new Date()) {
+        await OtpEmail.deleteOne({ email, otp });
+        return res.status(200).json({
+            message: 'OTP đã hết hạn.',
+            success: false,
+
+        });
+    }
+
+    const user = await User.findOne({ email });
+    if (user) {
+        const saltRounds = await bcrypt.genSalt();
+        const hashPass = await bcrypt.hash(password, saltRounds);
+
+        await User.findOneAndUpdate(
+            { email: email },
+            { password: hashPass },
+            { new: true, runValidators: true }
+        );
+
+        return res.status(200).json({
+            message: 'Thay đổi mật khẩu thành công',
+            success: true,
         });
     }
 }
@@ -111,7 +219,7 @@ async function login(req, res, next) {
             });
         }
 
-        const checkPassword = await compare(password, user.password);
+        const checkPassword = await bcrypt.compare(password, user.password);
         if (!checkPassword) {
             return res.status(200).json({
                 message: 'Mật khẩu không chính xác!',
@@ -216,4 +324,13 @@ async function logout(req, res, next) {
     }
 }
 
-module.exports = { signup, login, logout, loginWithGoogle, verifyOtp };
+module.exports = {
+    signup,
+    login,
+    logout,
+    loginWithGoogle,
+    verifyOtp,
+    sendOTP,
+    verifyEmail,
+    changePassword,
+};
