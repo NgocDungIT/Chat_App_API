@@ -207,12 +207,12 @@ const setupSocket = (server) => {
             if (!updatedChannel) {
                 throw new Error('Channel not found');
             }
-            
+
             const memberSocketId = userSocketMap.get(userId.toString());
-            
+
             if (memberSocketId) {
                 io.to(memberSocketId).emit('userIsKickedOut', {
-                    channelId: channel._id
+                    channelId: channel._id,
                 });
             }
         } catch (error) {
@@ -230,12 +230,20 @@ const setupSocket = (server) => {
         }
     };
 
+    const broadcastOnlineUsers = () => {
+        const onlineUserIds = Array.from(userSocketMap.keys());
+        for (const [userId, socketId] of userSocketMap.entries()) {
+            io.to(socketId).emit('onlineUsers', onlineUserIds);
+        }
+    };
+
     io.on('connection', (socket) => {
         const userId = socket.handshake.query.userId;
 
         if (userId) {
             console.log('Connect socket user: ', userId);
             userSocketMap.set(userId, socket.id);
+            broadcastOnlineUsers();
         } else {
             console.log('User id not provided during connection.');
         }
@@ -276,6 +284,7 @@ const setupSocket = (server) => {
         socket.on('disconnect', () => {
             console.log('❌ User disconnected:', userId);
             disconnectSocket(socket);
+            broadcastOnlineUsers();
         });
     });
 };
