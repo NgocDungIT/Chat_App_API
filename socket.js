@@ -1,6 +1,7 @@
 const { Server } = require('socket.io');
 const Message = require('./models/Messages.js');
 const Channel = require('./models/Channel.js');
+const User = require('./models/User.js');
 
 const setupSocket = (server) => {
     const io = new Server(server, {
@@ -24,7 +25,7 @@ const setupSocket = (server) => {
 
         if (recipientSocketId) {
             io.to(recipientSocketId).emit('recieveMessage', messageData);
-            io.to(recipientSocketId).emit('addDirectContact', contact);
+            io.to(recipientSocketId).emit('addDirectContact', messageData);
         }
 
         if (senderSocketId) {
@@ -221,6 +222,28 @@ const setupSocket = (server) => {
         }
     };
 
+    const blockUser = async (socket) => {
+        const userId = socket.userId;
+        const idBlock = socket.idBlock;
+        const user = await User.findByIdAndUpdate(
+            userId,
+            { $addToSet: { blockUsers: idBlock } },
+            { new: true, runValidators: true }
+        );
+
+        const socketIdBlock = userSocketMap.get(idBlock);
+        const socketIdUser = userSocketMap.get(userId);
+
+        if (socketIdUser) {
+            io.to(socketIdUser).emit('blockedUser', user);
+        }
+
+        if (socketIdBlock) {
+            io.to(socketIdBlock).emit('blockedUser', user);
+
+        }
+    };
+
     const disconnectSocket = (socket) => {
         for (const [userId, socketId] of userSocketMap.entries()) {
             if (socketId === socket.id) {
@@ -255,6 +278,7 @@ const setupSocket = (server) => {
         socket.on('deleteChannel', sendChannelDelete);
         socket.on('changeImageChannel', sendChannelChangeImage);
         socket.on('kickMemberChannel', sendChannelKick);
+        socket.on('blockUser', blockUser);
 
         socket.on('callUser', (data) => {
             const senderSocketId = userSocketMap.get(data.userToCall._id);
